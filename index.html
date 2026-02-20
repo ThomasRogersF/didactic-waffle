@@ -1,186 +1,62 @@
 <!doctype html>
-<html lang="en">
+<html>
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Audio Widget</title>
+  <title>Audio Button</title>
   <style>
-    :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
-    body {
-      margin: 0;
-      background: transparent;          /* nice for embedding */
-      display: grid;
-      place-items: center;
-      min-height: 100vh;
-    }
-    .player {
-      width: min(520px, 92vw);
-      border: 1px solid rgba(0,0,0,.12);
-      border-radius: 14px;
-      padding: 14px 14px 12px;
-      background: rgba(255,255,255,.92);
-      box-shadow: 0 8px 30px rgba(0,0,0,.10);
-    }
-    .top {
-      display: flex;
-      gap: 12px;
-      align-items: center;
-    }
-    button {
+    html, body { margin:0; padding:0; background:transparent; }
+    body { display:grid; place-items:center; width:100vw; height:100vh; }
+    .btn{
+      width: var(--size);
+      height: var(--size);
+      border-radius: 999px;
       border: 0;
-      border-radius: 12px;
-      padding: 10px 14px;
-      cursor: pointer;
-      font-weight: 600;
-      background: #111;
-      color: #fff;
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
+      background:#111;
+      color:#fff;
+      display:grid;
+      place-items:center;
+      cursor:pointer;
+      user-select:none;
+      box-shadow: 0 8px 20px rgba(0,0,0,.18);
+      -webkit-tap-highlight-color: transparent;
     }
-    button:disabled { opacity: .5; cursor: not-allowed; }
-    .meta { flex: 1; min-width: 0; }
-    .title { font-weight: 700; line-height: 1.2; }
-    .hint { font-size: 12px; opacity: .7; margin-top: 2px; }
-    .row {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-top: 12px;
-    }
-    input[type="range"] { width: 100%; }
-    .time {
-      font-variant-numeric: tabular-nums;
-      font-size: 12px;
-      opacity: .8;
-      width: 90px;
-      text-align: right;
-    }
-    .small {
-      margin-top: 10px;
-      display: flex;
-      justify-content: space-between;
-      gap: 10px;
-      font-size: 12px;
-      opacity: .8;
-    }
-    .linkish { text-decoration: underline; cursor: pointer; }
+    .icon{ width: calc(var(--size) * 0.42); height: calc(var(--size) * 0.42); fill:#fff; }
   </style>
 </head>
 <body>
-  <div class="player" role="group" aria-label="Audio player widget">
-    <div class="top">
-      <button id="playBtn" type="button" disabled>
-        ▶️ <span id="playLabel">Play</span>
-      </button>
-
-      <div class="meta">
-        <div class="title" id="trackTitle">Loading audio…</div>
-        <div class="hint">Tip: add <b>?src=</b> to the URL to choose the audio file.</div>
-      </div>
-    </div>
-
-    <div class="row">
-      <input id="seek" type="range" min="0" max="100" value="0" step="0.1" />
-      <div class="time" id="time">0:00 / 0:00</div>
-    </div>
-
-    <div class="small">
-      <label>
-        Volume
-        <input id="vol" type="range" min="0" max="1" value="1" step="0.01" style="vertical-align: middle; width: 140px;" />
-      </label>
-      <div>
-        <span class="linkish" id="copyLink">Copy embed link</span>
-      </div>
-    </div>
-
-    <audio id="audio" preload="metadata" playsinline></audio>
-  </div>
+  <button class="btn" id="toggle" aria-label="Play audio">
+    <svg id="play" class="icon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+    <svg id="pause" class="icon" viewBox="0 0 24 24" style="display:none"><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg>
+  </button>
+  <audio id="audio" preload="metadata"></audio>
 
   <script>
+    const p = new URLSearchParams(location.search);
+    const src = p.get("src") || "";
+    const size = parseInt(p.get("size") || "56", 10);
+
+    document.documentElement.style.setProperty("--size", `${Math.max(32, Math.min(size, 140))}px`);
+
     const audio = document.getElementById("audio");
-    const playBtn = document.getElementById("playBtn");
-    const playLabel = document.getElementById("playLabel");
-    const trackTitle = document.getElementById("trackTitle");
-    const seek = document.getElementById("seek");
-    const timeEl = document.getElementById("time");
-    const vol = document.getElementById("vol");
-    const copyLink = document.getElementById("copyLink");
+    const btn = document.getElementById("toggle");
+    const play = document.getElementById("play");
+    const pause = document.getElementById("pause");
 
-    // 1) Choose audio source
-    // Option A: pass as URL param: ?src=https://example.com/audio.mp3&title=My%20Track
-    // Option B: hardcode a default below (recommended after you confirm hosting works)
-    const params = new URLSearchParams(location.search);
-    const src = params.get("src") || ""; // put a default mp3 URL here if you want
-    const title = params.get("title") || "Audio Widget";
+    if (!src) { btn.disabled = true; btn.title = "Add ?src=YOUR_MP3_URL"; }
+    else { audio.src = src; }
 
-    if (!src) {
-      trackTitle.textContent = "No audio set. Add ?src=YOUR_MP3_URL to this page URL.";
-      // Example:
-      // https://YOURDOMAIN/index.html?src=https%3A%2F%2Fexample.com%2Ffile.mp3&title=Lesson%201
-    } else {
-      audio.src = src;
-      trackTitle.textContent = title;
-    }
-
-    // 2) Helpers
-    const fmt = (secs) => {
-      if (!isFinite(secs)) return "0:00";
-      const m = Math.floor(secs / 60);
-      const s = Math.floor(secs % 60).toString().padStart(2, "0");
-      return `${m}:${s}`;
+    const set = (isPlaying) => {
+      play.style.display = isPlaying ? "none" : "block";
+      pause.style.display = isPlaying ? "block" : "none";
+      btn.setAttribute("aria-label", isPlaying ? "Pause audio" : "Play audio");
     };
 
-    function updateTime() {
-      const cur = audio.currentTime || 0;
-      const dur = audio.duration || 0;
-      const pct = dur ? (cur / dur) * 100 : 0;
-      seek.value = pct;
-      timeEl.textContent = `${fmt(cur)} / ${fmt(dur)}`;
-    }
-
-    function setPlayState(isPlaying) {
-      playLabel.textContent = isPlaying ? "Pause" : "Play";
-      playBtn.firstChild.textContent = isPlaying ? "⏸️ " : "▶️ ";
-    }
-
-    // 3) Wire up events
-    audio.addEventListener("loadedmetadata", () => {
-      playBtn.disabled = false;
-      updateTime();
+    btn.addEventListener("click", async () => {
+      if (audio.paused) { await audio.play(); set(true); }
+      else { audio.pause(); set(false); }
     });
-
-    audio.addEventListener("timeupdate", updateTime);
-    audio.addEventListener("play", () => setPlayState(true));
-    audio.addEventListener("pause", () => setPlayState(false));
-    audio.addEventListener("ended", () => setPlayState(false));
-
-    playBtn.addEventListener("click", async () => {
-      // Many embeds require user click (autoplay blocked)
-      if (audio.paused) await audio.play();
-      else audio.pause();
-    });
-
-    seek.addEventListener("input", () => {
-      const dur = audio.duration || 0;
-      const pct = parseFloat(seek.value) / 100;
-      audio.currentTime = dur * pct;
-    });
-
-    vol.addEventListener("input", () => {
-      audio.volume = parseFloat(vol.value);
-    });
-
-    copyLink.addEventListener("click", async () => {
-      try {
-        await navigator.clipboard.writeText(location.href);
-        copyLink.textContent = "Copied!";
-        setTimeout(() => (copyLink.textContent = "Copy embed link"), 1200);
-      } catch {
-        alert("Copy failed. Manually copy the URL from your address bar.");
-      }
-    });
+    audio.addEventListener("ended", () => set(false));
   </script>
 </body>
 </html>
